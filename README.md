@@ -16,6 +16,6 @@ https://trajkovicv.github.io/pool-abstimmung-mallorca/
 
 ## Technik
 
-Vanilla HTML/CSS/JS, zero build step. Sync via [jsonblob.com](https://jsonblob.com) (anonymer öffentlicher JSON-Store, kein Account nötig).
+Vanilla HTML/CSS/JS, zero build step. Sync via [keyvalue.immanuel.co](https://keyvalue.immanuel.co) (anonymer Key-Value-Store mit CORS, kein Account nötig).
 
-Blob-ID ist in [app.js](app.js) hardcoded — alle 6 lesen/schreiben auf denselben Blob.
+Jeder Name ist ein eigener Key im App-Scope `mallorca-ari-2026-bachelor-v1`; Werte sind base64url-encoded JSON-Votes.

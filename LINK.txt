@@ -1,0 +1,44 @@
+MALLORCA BACHELOR 2026 - ABSTIMMUNG
+====================================
+
+LINK ZUM TEILEN IN DER WHATSAPP-GRUPPE:
+
+  https://trajkovicv.github.io/pool-abstimmung-mallorca/
+
+
+WAS IST DAS?
+------------
+17 Fragen zu Unterkunft, Programm und Budget.
+Jeder wählt seinen Namen, beantwortet die Fragen.
+Antworten werden automatisch gespeichert (kein Submit-Knopf nötig).
+Im Tab "Ergebnisse" sieht jeder live wer was gewählt hat.
+
+WER IST EINGETRAGEN?
+--------------------
+Marko, Saven, Vladan, Suheib, Vuk, Aramis
+
+TECHNIK
+-------
+- GitHub Repo:  https://github.com/Trajkovicv/pool-abstimmung-mallorca
+- Hosting:      GitHub Pages (public, gratis)
+- Daten-Sync:   keyvalue.immanuel.co (anonymer Key-Value-Store mit CORS, kein Account)
+- App-Key:      mallorca-ari-2026-bachelor-v1
+  (Jeder der 6 Namen ist ein eigener Key, Wert = base64url-encoded JSON.)
+
+WICHTIG
+-------
+- Die GitHub-Pages-URL braucht nach dem ersten Push meist 1-3 Minuten bis sie
+  live ist. Falls sie kurz nach diesem Deploy noch 404 zeigt, einfach 2-3 Min
+  warten und neu laden.
+- Die keyvalue-Eintraege sind oeffentlich lesbar/beschreibbar von jedem der
+  den App-Key kennt. Fuer 6 Freunde ist das OK. Am Ende Screenshot sichern.
+
+ANPASSUNGEN
+-----------
+Fragen aendern:  app.js ab Zeile 12 (const questions = [ ... ])
+Farben/Design:   styles.css
+Namen aendern:   app.js Zeile 6 (const NAMES = [...])
+
+Nach Aenderungen:
+  git add -A && git commit -m "..." && git push
+GitHub Pages aktualisiert automatisch nach 1-2 Min.

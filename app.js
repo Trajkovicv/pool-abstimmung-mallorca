@@ -2,10 +2,13 @@
 // Mallorca Bachelor Abstimmung — 6 Leute, 17 Fragen, jsonblob.com Sync
 // ============================================================================
 
-const BLOB_ID = '019da558-f087-7573-aae4-5c47cf7ae7a1';
-const BLOB_URL = `https://jsonblob.com/api/jsonBlob/${BLOB_ID}`;
+// Storage: keyvalue.immanuel.co — free, CORS-enabled, no account.
+// Each person's vote is one key (name lowercased), value is base64url(JSON).
+const API_BASE = 'https://keyvalue.immanuel.co/api/KeyVal';
+const APP_KEY = 'mallorca-ari-2026-bachelor-v1';
 const NAMES = ['Marko', 'Saven', 'Vladan', 'Suheib', 'Vuk', 'Aramis'];
 const LS_KEY = 'mallorca_vote_name';
+const MAX_TEXT_LEN = 350;  // cap free-text to keep URL under length limit
 
 // ============================================================================
 // FRAGEN
@@ -238,16 +241,48 @@ let state = {
 };
 
 // ============================================================================
-// API (jsonblob.com)
+// API — keyvalue.immanuel.co (one key per name, base64url-encoded JSON)
 // ============================================================================
+function b64urlEncode(str) {
+  // UTF-8 safe
+  const utf8 = new TextEncoder().encode(str);
+  let bin = '';
+  utf8.forEach(b => bin += String.fromCharCode(b));
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlDecode(str) {
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (str.length % 4) str += '=';
+  const bin = atob(str);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+async function loadOne(name) {
+  const res = await fetch(`${API_BASE}/GetValue/${APP_KEY}/${name.toLowerCase()}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const raw = await res.json();  // returns the value as a JSON string
+  if (!raw || typeof raw !== 'string' || raw.length < 8) return null;
+  try {
+    return JSON.parse(b64urlDecode(raw));
+  } catch (e) {
+    return null;
+  }
+}
+
 async function loadVotes() {
   setStatus('Lade Abstimmungen…');
   try {
-    const res = await fetch(BLOB_URL, { cache: 'no-store' });
-    if (!res.ok) throw new Error('Status ' + res.status);
-    const data = await res.json();
-    state.allVotes = data.votes || {};
-    setStatus('Verbunden', 'ok');
+    const results = await Promise.all(NAMES.map(n =>
+      loadOne(n).catch(() => null)
+    ));
+    const votes = {};
+    NAMES.forEach((n, i) => {
+      if (results[i]) votes[n] = results[i];
+    });
+    state.allVotes = votes;
+    setStatus('Verbunden · ' + Object.keys(votes).length + '/' + NAMES.length, 'ok');
     return true;
   } catch (e) {
     setStatus('Offline · ' + e.message, 'err');
@@ -258,23 +293,23 @@ async function loadVotes() {
 async function saveVote(name, vote) {
   setStatus('Speichere…');
   try {
-    // re-fetch latest to avoid overwriting someone else's write
-    const res = await fetch(BLOB_URL, { cache: 'no-store' });
-    const current = res.ok ? await res.json() : { votes: {} };
-    current.votes = current.votes || {};
-    current.votes[name] = { ...vote, updatedAt: new Date().toISOString() };
-
-    const put = await fetch(BLOB_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(current)
-    });
-    if (!put.ok) throw new Error('PUT Status ' + put.status);
-    state.allVotes = current.votes;
-    setStatus('Gespeichert', 'ok');
+    const payload = { ...vote, updatedAt: new Date().toISOString() };
+    // Trim free-text to keep URL under length limit
+    if (payload.must_have && payload.must_have.length > MAX_TEXT_LEN) {
+      payload.must_have = payload.must_have.slice(0, MAX_TEXT_LEN);
+    }
+    if (payload.no_go && payload.no_go.length > MAX_TEXT_LEN) {
+      payload.no_go = payload.no_go.slice(0, MAX_TEXT_LEN);
+    }
+    const encoded = b64urlEncode(JSON.stringify(payload));
+    const url = `${API_BASE}/UpdateValue/${APP_KEY}/${name.toLowerCase()}/${encoded}`;
+    const res = await fetch(url, { method: 'POST', body: '' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    state.allVotes[name] = payload;
+    setStatus('Gespeichert · ' + new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }), 'ok');
     return true;
   } catch (e) {
-    setStatus('Fehler beim Speichern · ' + e.message, 'err');
+    setStatus('Fehler · ' + e.message, 'err');
     return false;
   }
 }
@@ -464,11 +499,12 @@ function updateNextBtn(q) {
 }
 
 async function onNext(q) {
-  // save incrementally after name is known
+  // Incremental save (fire-and-forget, don't block navigation)
   if (state.myName && q.id !== 'name') {
-    await saveVote(state.myName, state.answers);
+    saveVote(state.myName, state.answers).catch(() => {});
   }
   if (state.currentIdx === questions.length - 1) {
+    // Final save — await to show status
     if (state.myName) await saveVote(state.myName, state.answers);
     state.submitted = true;
     render();
