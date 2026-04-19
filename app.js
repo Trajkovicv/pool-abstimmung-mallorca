@@ -3,12 +3,15 @@
 // ============================================================================
 
 // Storage: keyvalue.immanuel.co — free, CORS-enabled, no account.
-// Each person's vote is one key (name lowercased), value is base64url(JSON).
+// API limits: total URL length ~280 chars. Short app key + 180-char chunks
+// keeps URL safely under limit. 4 chunks per user → ~540 bytes JSON capacity.
 const API_BASE = 'https://keyvalue.immanuel.co/api/KeyVal';
-const APP_KEY = 'mallorca-ari-2026-bachelor-v1';
+const APP_KEY = 'mbv2';  // keep short — counts against URL length budget
 const NAMES = ['Marko', 'Saven', 'Vladan', 'Suheib', 'Vuk', 'Aramis'];
 const LS_KEY = 'mallorca_vote_name';
-const MAX_TEXT_LEN = 350;  // cap free-text to keep URL under length limit
+const CHUNKS = 4;          // number of chunks per vote
+const CHUNK_MAX = 180;     // max chars per chunk
+const MAX_TEXT_LEN = 250;  // cap free-text so full payload fits in 4 chunks
 
 // ============================================================================
 // FRAGEN
@@ -259,13 +262,32 @@ function b64urlDecode(str) {
   return new TextDecoder().decode(bytes);
 }
 
-async function loadOne(name) {
-  const res = await fetch(`${API_BASE}/GetValue/${APP_KEY}/${name.toLowerCase()}`, { cache: 'no-store' });
+function chunkKey(name, i) { return `${name.toLowerCase()}_${i}`; }
+
+async function getChunk(key) {
+  const res = await fetch(`${API_BASE}/GetValue/${APP_KEY}/${key}`, { cache: 'no-store' });
+  if (!res.ok) return '';
+  const raw = await res.json();
+  return (typeof raw === 'string') ? raw : '';
+}
+async function putChunk(key, value) {
+  // API rejects empty path segment; use 'X' placeholder for empty chunks
+  const v = value && value.length > 0 ? value : 'X';
+  const url = `${API_BASE}/UpdateValue/${APP_KEY}/${key}/${v}`;
+  const res = await fetch(url, { method: 'POST', body: '' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
-  const raw = await res.json();  // returns the value as a JSON string
-  if (!raw || typeof raw !== 'string' || raw.length < 8) return null;
+}
+
+async function loadOne(name) {
+  const keys = [];
+  for (let i = 0; i < CHUNKS; i++) keys.push(chunkKey(name, i));
+  const chunks = await Promise.all(keys.map(k => getChunk(k).catch(() => '')));
+  const joined = chunks
+    .filter(c => c && c !== 'X')
+    .join('');
+  if (joined.length < 8) return null;
   try {
-    return JSON.parse(b64urlDecode(raw));
+    return JSON.parse(b64urlDecode(joined));
   } catch (e) {
     return null;
   }
@@ -282,7 +304,7 @@ async function loadVotes() {
       if (results[i]) votes[n] = results[i];
     });
     state.allVotes = votes;
-    setStatus('Verbunden · ' + Object.keys(votes).length + '/' + NAMES.length, 'ok');
+    setStatus('Verbunden · ' + Object.keys(votes).length + '/' + NAMES.length + ' abgestimmt', 'ok');
     return true;
   } catch (e) {
     setStatus('Offline · ' + e.message, 'err');
@@ -294,17 +316,22 @@ async function saveVote(name, vote) {
   setStatus('Speichere…');
   try {
     const payload = { ...vote, updatedAt: new Date().toISOString() };
-    // Trim free-text to keep URL under length limit
     if (payload.must_have && payload.must_have.length > MAX_TEXT_LEN) {
       payload.must_have = payload.must_have.slice(0, MAX_TEXT_LEN);
     }
     if (payload.no_go && payload.no_go.length > MAX_TEXT_LEN) {
       payload.no_go = payload.no_go.slice(0, MAX_TEXT_LEN);
     }
-    const encoded = b64urlEncode(JSON.stringify(payload));
-    const url = `${API_BASE}/UpdateValue/${APP_KEY}/${name.toLowerCase()}/${encoded}`;
-    const res = await fetch(url, { method: 'POST', body: '' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const b64 = b64urlEncode(JSON.stringify(payload));
+    if (b64.length > CHUNKS * CHUNK_MAX) {
+      throw new Error('Vote zu lang — kürze Must-Have / No-Go');
+    }
+    const puts = [];
+    for (let i = 0; i < CHUNKS; i++) {
+      const chunk = b64.slice(i * CHUNK_MAX, (i + 1) * CHUNK_MAX);
+      puts.push(putChunk(chunkKey(name, i), chunk));
+    }
+    await Promise.all(puts);
     state.allVotes[name] = payload;
     setStatus('Gespeichert · ' + new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }), 'ok');
     return true;
