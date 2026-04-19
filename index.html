@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="theme-color" content="#0a1628" />
+  <title>Mallorca 2026 — Bachelor Abstimmung</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@1,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-gradient"></div>
+  <div class="bg-sun"></div>
+
+  <div id="app">
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-kicker">Aramis Bachelor Wochenende</div>
+        <h1 class="brand-title">Mallorca <span>2026</span></h1>
+        <div class="brand-sub">7.–9. · Abstimmung für 6 Chefs</div>
+      </div>
+      <nav class="tabs">
+        <button id="tab-vote" class="tab active">Abstimmen</button>
+        <button id="tab-results" class="tab">Ergebnisse</button>
+      </nav>
+    </header>
+
+    <main id="main"></main>
+
+    <footer class="app-footer">
+      <span id="status" class="status"></span>
+    </footer>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
